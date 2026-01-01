@@ -1,0 +1,32 @@
+{
+  "name": "election-integrity-backend",
+  "version": "1.0.0",
+  "description": "Government-grade Election Integrity & Voter Registry System Backend",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": ["election", "voter-registry", "audit", "government"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.6.1",
+    "cors": "^2.8.5",
+    "uuid": "^9.0.1",
+    "bcryptjs": "^2.4.3",
+    "joi": "^17.11.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.0",
+    "@types/cors": "^2.8.17",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/uuid": "^9.0.8",
+    "typescript": "^5.3.3",
+    "tsx": "^4.7.0"
+  }
+}

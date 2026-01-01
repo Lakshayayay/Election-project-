@@ -1,0 +1,17 @@
+
+> election-integrity-backend@1.0.0 dev
+> tsx watch src/server.ts
+
+
+╔══════════════════════════════════════════════════════════════╗
+║   Election Integrity & Voter Registry System Backend        ║
+║   Server running on http://localhost:5000                      ║
+║   WebSocket server active                                    ║
+╚══════════════════════════════════════════════════════════════╝
+
+KEY SYSTEM STATEMENT:
+"This system digitises statutory election records and voter 
+registry workflows to assist audit and administrative review, 
+without interfering in voting or vote counting."
+  
+2:20:23 AM [tsx] Process didn't exit in 5s. Force killing...
