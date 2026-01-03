@@ -1,6 +1,9 @@
 // API Service for Citizen Dashboard
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { API_BASE } from '../config/api';
+import { endpoints } from '../config/endpoints';
+
+const API_BASE_URL = API_BASE;
 
 export interface VoterRequest {
   request_id: string;
@@ -53,7 +56,7 @@ export async function submitVoterRequest(
   submittedData: Record<string, any>,
   epicId?: string
 ): Promise<VoterRequest> {
-  const response = await fetch(`${API_BASE_URL}/voter/request`, {
+  const response = await fetch(`${API_BASE_URL}${endpoints.submitVoterRequest}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -80,7 +83,7 @@ export async function trackEpicStatus(
   epicId?: string,
   mobile?: string
 ): Promise<VoterRequest> {
-  const response = await fetch(`${API_BASE_URL}/voter/track-status`, {
+  const response = await fetch(`${API_BASE_URL}${endpoints.trackStatus}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -103,7 +106,7 @@ export async function trackEpicStatus(
 
 // Get voter by EPIC ID
 export async function getVoterByEpic(epicId: string): Promise<VoterRecord> {
-  const response = await fetch(`${API_BASE_URL}/voter/epic/${epicId}`);
+  const response = await fetch(`${API_BASE_URL}${endpoints.getVoterByEpic(epicId)}`);
 
   if (!response.ok) {
     const error = await response.json();
@@ -116,7 +119,7 @@ export async function getVoterByEpic(epicId: string): Promise<VoterRecord> {
 
 // Get election results
 export async function getElectionResults(constituency?: string): Promise<ElectionResult[]> {
-  const url = new URL(`${API_BASE_URL}/election/results`);
+  const url = new URL(`${API_BASE_URL}${endpoints.electionResults}`);
   if (constituency) {
     url.searchParams.append('constituency', constituency);
   }
