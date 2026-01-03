@@ -11,7 +11,7 @@ export function Header({ activeTab, setActiveTab, onLogout }: HeaderProps) {
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'verification', label: 'Voter Verification' },
     { id: 'flagged', label: 'Flagged Cases' },
-    { id: 'livecount', label: 'Live Vote Count' },
+    { id: 'certificate', label: 'Integrity Certificate' },
     { id: 'epic', label: 'EPIC Issuance' },
   ];
 

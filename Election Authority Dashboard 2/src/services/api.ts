@@ -1,6 +1,9 @@
 // API Service for Authority Dashboard
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { endpoints } from '../config/endpoints';
+import { API_BASE } from '../config/api';
+
+const API_BASE_URL = API_BASE;
 
 export interface VoterRequest {
   request_id: string;
@@ -50,7 +53,7 @@ export async function getVoterRequests(filters?: {
   risk_level?: string;
   request_type?: string;
 }): Promise<VoterRequest[]> {
-  const url = new URL(`${API_BASE_URL}/authority/voter-requests`);
+  const url = new URL(`${API_BASE_URL}${endpoints.voterRequests}`);
   if (filters?.status) url.searchParams.append('status', filters.status);
   if (filters?.risk_level) url.searchParams.append('risk_level', filters.risk_level);
   if (filters?.request_type) url.searchParams.append('request_type', filters.request_type);
@@ -71,7 +74,7 @@ export async function updateRequestStatus(
   status: string,
   updatedBy?: string
 ): Promise<VoterRequest> {
-  const response = await fetch(`${API_BASE_URL}/authority/voter-request/${requestId}/status`, {
+  const response = await fetch(`${API_BASE_URL}${endpoints.requestStatus(requestId)}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -98,7 +101,7 @@ export async function getFlags(filters?: {
   resolved?: boolean;
   booth_id?: string;
 }): Promise<Flag[]> {
-  const url = new URL(`${API_BASE_URL}/authority/flags`);
+  const url = new URL(`${API_BASE_URL}${endpoints.flags}`);
   if (filters?.risk_level) url.searchParams.append('risk_level', filters.risk_level);
   if (filters?.entity_type) url.searchParams.append('entity_type', filters.entity_type);
   if (filters?.resolved !== undefined) url.searchParams.append('resolved', filters.resolved.toString());
@@ -116,7 +119,7 @@ export async function getFlags(filters?: {
 
 // Resolve flag
 export async function resolveFlag(flagId: string, resolvedBy: string): Promise<Flag> {
-  const response = await fetch(`${API_BASE_URL}/authority/flag/${flagId}/resolve`, {
+  const response = await fetch(`${API_BASE_URL}${endpoints.resolveFlag(flagId)}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -137,7 +140,7 @@ export async function resolveFlag(flagId: string, resolvedBy: string): Promise<F
 
 // Get booth risk summary
 export async function getBoothRiskSummary(boothId: string): Promise<BoothRiskSummary> {
-  const response = await fetch(`${API_BASE_URL}/authority/booth/${boothId}/risk`);
+  const response = await fetch(`${API_BASE_URL}${endpoints.boothRisk(boothId)}`);
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || 'Failed to fetch booth risk');
@@ -149,7 +152,7 @@ export async function getBoothRiskSummary(boothId: string): Promise<BoothRiskSum
 
 // Get dashboard stats
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const response = await fetch(`${API_BASE_URL}/authority/stats`);
+  const response = await fetch(`${API_BASE_URL}${endpoints.authorityStats}`);
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || 'Failed to fetch stats');
@@ -159,16 +162,52 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   return result.stats;
 }
 // Get election results
-export async function getElectionResults(constituency?: string): Promise<any[]> {
-  const url = new URL(`${API_BASE_URL}/election/results`);
-  if (constituency) url.searchParams.append('constituency', constituency);
-
-  const response = await fetch(url.toString());
+// Get Integrity Certificate
+export async function getIntegrityCertificate(constituencyId: string): Promise<IntegrityCertificate> {
+  const response = await fetch(`${API_BASE_URL}${endpoints.integrityCertificate(constituencyId)}`);
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch election results');
+    throw new Error(error.error || 'Failed to fetch certificate');
   }
 
   const result = await response.json();
-  return result.results;
+  return result.certificate;
+}
+
+export interface IntegrityCertificate {
+  constituency_id: string;
+  generated_at: string;
+  roll_risk: {
+    total_voters: number;
+    high_risk_detected: number;
+    duplicate_probability: number;
+    cluster_size_alerts: number;
+    final_score: number;
+    risk_level: 'Low' | 'Medium' | 'High';
+  };
+  polling_consistency: {
+    total_booths: number;
+    matched_booths: number;
+    mismatched_booths: number;
+    total_votes_form17a: number;
+    total_votes_form17c: number;
+    deviation_percentage: number;
+    status: 'MATCH' | 'MINOR_DEVIATION' | 'CRITICAL_MISMATCH';
+  };
+  turnout_analytics: {
+    current_turnout: number;
+    historical_average: number;
+    deviation_from_baseline: number;
+    spike_detected: boolean;
+  };
+  final_confidence_index: number;
+  score_breakdown: {
+    roll_risk_weight: number;
+    polling_consistency_weight: number;
+    turnout_analytics_weight: number;
+    roll_score_contribution: number;
+    polling_score_contribution: number;
+    turnout_score_contribution: number;
+  };
+  status: 'PROVISIONAL' | 'VERIFIED' | 'FLAGGED';
 }
