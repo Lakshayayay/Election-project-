@@ -1,6 +1,6 @@
 // Core Type Definitions
 
-export type RiskLevel = 'Normal' | 'Needs Review' | 'High Risk';
+export type RiskLevel = 'Normal' | 'Needs Review' | 'High Risk' | 'Critical';
 
 export type RequestStatus = 'Pending' | 'Under Review' | 'Approved' | 'Rejected' | 'On Hold';
 
@@ -40,11 +40,13 @@ export interface VoterRequest {
   epic_id?: string;
   submitted_data: Record<string, any>;
   status: RequestStatus;
-  risk_score: RiskLevel;
+  risk_level: RiskLevel; // Mapped from score
+  risk_score: number;    // 0-100
   risk_explanation?: string;
   flags: Flag[];
   submitted_at: string;
   updated_at: string;
+  ip_address?: string; // Added for velocity check
 }
 
 export interface Flag {
@@ -52,6 +54,8 @@ export interface Flag {
   entity_type: 'voter_request' | 'form17a' | 'form17c' | 'booth';
   entity_id: string;
   risk_level: RiskLevel;
+  risk_score: number; // 0-100 contribution
+  rule_id: string;    // e.g., 'DUPLICATE_EPIC'
   reason: string;
   explanation: string;
   created_at: string;
@@ -117,4 +121,51 @@ export interface AuthorityEvents {
   'audit_flag_detected': Flag;
   'count_mismatch_alert': { booth_id: string; form17a_count: number; form17c_count: number };
   'booth_risk_updated': { booth_id: string; risk_level: RiskLevel; flag_count: number };
+}
+// ========== INTEGRITY & AUDIT TYPES ==========
+
+export interface RollRiskScore {
+  total_voters: number;
+  high_risk_detected: number;
+  duplicate_probability: number; // 0-100
+  cluster_size_alerts: number;   // >10 voters per household
+  final_score: number;           // 0-100 (100 = Clean)
+  risk_level: 'Low' | 'Medium' | 'High';
+}
+
+export interface PollingConsistency {
+  total_booths: number;
+  matched_booths: number;
+  mismatched_booths: number;
+  total_votes_form17a: number; // Voters marked
+  total_votes_form17c: number; // Votes stored
+  deviation_percentage: number;
+  status: 'MATCH' | 'MINOR_DEVIATION' | 'CRITICAL_MISMATCH';
+}
+
+export interface TurnoutAnalytics {
+  current_turnout: number;
+  historical_average: number; // Mocked baseline
+  deviation_from_baseline: number;
+  spike_detected: boolean;
+}
+
+export interface ScoreBreakdown {
+  roll_risk_weight: number;
+  polling_consistency_weight: number;
+  turnout_analytics_weight: number;
+  roll_score_contribution: number;
+  polling_score_contribution: number;
+  turnout_score_contribution: number;
+}
+
+export interface IntegrityCertificate {
+  constituency_id: string;
+  generated_at: string; // ISO Date
+  roll_risk: RollRiskScore;
+  polling_consistency: PollingConsistency;
+  turnout_analytics: TurnoutAnalytics;
+  final_confidence_index: number; // 0-100%
+  score_breakdown: ScoreBreakdown;
+  status: 'PROVISIONAL' | 'VERIFIED' | 'FLAGGED';
 }

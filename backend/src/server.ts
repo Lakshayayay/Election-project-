@@ -17,16 +17,29 @@ const allowedOrigins = [
   'http://localhost:3002',
   'http://localhost:3003'
 ];
+
+// Add production origins from ENV
+if (process.env.ALLOWED_ORIGINS) {
+  const productionOrigins = process.env.ALLOWED_ORIGINS.split(',');
+  allowedOrigins.push(...productionOrigins);
+}
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
   cors: {
-    origin: allowedOrigins,
-    methods: ['GET', 'POST']
+    origin: "*",
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 
 // Middleware
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use(
+  cors({
+    origin: "*",
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
 // Initialize Domains
@@ -192,13 +205,19 @@ app.post('/api/audit/form17c/upload', (req, res) => {
   }
 });
 
-// Get election results (read-only, aggregated)
-app.get('/api/election/results', (req, res) => {
+// Get Integrity Certificate (Provisional)
+// NOTE: Replaces old "Election Results" endpoint to avoid exposing vote counts.
+app.get('/api/audit/certificate/:constituencyId', (req, res) => {
   try {
-    const { constituency } = req.query;
-    const results = electionAudit.getElectionResults(constituency as string);
+    const { constituencyId } = req.params;
+    const certificate = electionAudit.generateIntegrityCertificate(constituencyId);
 
-    res.json({ success: true, results });
+    // Simulate signing delay
+    setTimeout(() => {
+        // In real system, this would be cryptographically signed
+    }, 100);
+
+    res.json({ success: true, certificate });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -385,15 +404,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('fetch_live_results', (data) => {
-    try {
-      const { constituency } = data;
-      const results = electionAudit.getElectionResults(constituency);
-      emitToCitizen(socket.id, 'live_results', { results });
-    } catch (error: any) {
-      emitToCitizen(socket.id, 'error', { message: error.message });
-    }
-  });
+
 
   socket.on('download_epic', (data) => {
     try {
@@ -422,16 +433,6 @@ io.on('connection', (socket) => {
 // Start server
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => {
-  console.log(`
-╔══════════════════════════════════════════════════════════════╗
-║   Election Integrity & Voter Registry System Backend        ║
-║   Server running on http://localhost:${PORT}                      ║
-║   WebSocket server active                                    ║
-╚══════════════════════════════════════════════════════════════╝
-
-KEY SYSTEM STATEMENT:
-"This system digitises statutory election records and voter 
-registry workflows to assist audit and administrative review, 
-without interfering in voting or vote counting."
-  `);
+  console.log(`Server running on port ${PORT}`);
 });
+

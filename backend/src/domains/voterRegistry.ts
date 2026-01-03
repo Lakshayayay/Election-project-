@@ -3,7 +3,7 @@
 
 import { VoterRecord, VoterRequest, RequestType, RequestStatus } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { generateVoterRecord } from '../data/synthetic';
+import { generateDemoVoters } from '../data/synthetic';
 import { RiskEngine } from '../engine/riskEngine';
 
 export class VoterRegistryDomain {
@@ -13,16 +13,23 @@ export class VoterRegistryDomain {
 
   constructor(riskEngine: RiskEngine) {
     this.riskEngine = riskEngine;
-    // Initialize with some synthetic records
-    this.initializeSyntheticData();
+    // Initialize with targeted demo data
+    this.initializeDemoData();
   }
 
-  private initializeSyntheticData(): void {
-    // Generate some initial voter records
-    for (let i = 0; i < 100; i++) {
-      const record = generateVoterRecord();
+  private initializeDemoData(): void {
+    // Generate targeted demo scenarios
+    const { records, requests } = generateDemoVoters(60); // 60 voters mixed scenarios
+    
+    // Register records
+    for (const record of records) {
       this.records.set(record.voter_record_id, record);
       this.riskEngine.registerVoterRecord(record);
+    } // Need to register records FIRST so duplicates are found
+
+    // Process synthetic requests
+    for (const reqData of requests) {
+       this.submitVoterRequest(reqData.type, reqData.data, reqData.data.epic_id, reqData.ip);
     }
   }
 
@@ -30,7 +37,8 @@ export class VoterRegistryDomain {
   submitVoterRequest(
     requestType: RequestType,
     submittedData: Record<string, any>,
-    epicId?: string
+    epicId?: string,
+    ipAddress?: string
   ): VoterRequest {
     const request_id = uuidv4();
     const voter_record_id = epicId 
@@ -44,18 +52,19 @@ export class VoterRegistryDomain {
       epic_id: epicId,
       submitted_data: submittedData,
       status: 'Pending',
-      risk_score: 'Normal',
+      risk_score: 0,
+      risk_level: 'Normal',
       flags: [],
       submitted_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      ip_address: ipAddress
     };
 
     // Score the request
-    const existingRecord = this.records.get(voter_record_id);
-    const existingRecords = existingRecord ? [existingRecord] : [];
-    const riskAssessment = this.riskEngine.scoreVoterRequest(request, existingRecords);
+    const riskAssessment = this.riskEngine.scoreVoterRequest(request);
     
-    request.risk_score = riskAssessment.risk_level;
+    request.risk_level = riskAssessment.risk_level;
+    request.risk_score = riskAssessment.risk_score;
     request.risk_explanation = riskAssessment.explanation;
     request.flags = riskAssessment.flags;
 
@@ -94,7 +103,7 @@ export class VoterRegistryDomain {
         requests = requests.filter(r => r.status === filters.status);
       }
       if (filters.risk_level) {
-        requests = requests.filter(r => r.risk_score === filters.risk_level);
+        requests = requests.filter(r => r.risk_level === filters.risk_level);
       }
       if (filters.request_type) {
         requests = requests.filter(r => r.request_type === filters.request_type);
@@ -111,7 +120,7 @@ export class VoterRegistryDomain {
     const allPending = this.getAllRequests({ status: 'Pending' });
     return {
       total: allPending.length,
-      high_risk: allPending.filter(r => r.risk_score === 'High Risk').length
+      high_risk: allPending.filter(r => r.risk_level === 'High Risk').length
     };
   }
 

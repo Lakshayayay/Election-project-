@@ -2,43 +2,66 @@
 // Handles Form 17A records, Form 17C summaries, booth-wise aggregation
 // NOTE: No vote choice, no voter identity linkage, no EVM access
 
-import { Form17ARecord, Form17CSummary, ElectionResult, Flag } from '../types';
+import { Form17ARecord, Form17CSummary, Flag, IntegrityCertificate, RollRiskScore, PollingConsistency, TurnoutAnalytics, ScoreBreakdown } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { generateForm17ARecord, generateForm17CSummary, generateElectionResult, generateBoothId } from '../data/synthetic';
+import { generateForm17ARecord, generateForm17CSummary, generateBoothId, generateDemoBooths } from '../data/synthetic';
 import { RiskEngine } from '../engine/riskEngine';
 
 export class ElectionAuditDomain {
   private form17aRecords: Map<string, Form17ARecord[]> = new Map(); // upload_id -> records[]
   private form17cSummaries: Map<string, Form17CSummary> = new Map(); // booth_id -> summary
-  private electionResults: Map<string, ElectionResult[]> = new Map(); // constituency -> results[]
+  // private electionResults: Map<string, ElectionResult[]> = new Map(); // REMOVED: No vote counting allowed
   private flags: Map<string, Flag> = new Map();
   private riskEngine: RiskEngine;
   private boothEpics: Map<string, Set<string>> = new Map(); // booth_id -> Set<epic_id>
 
   constructor(riskEngine: RiskEngine) {
     this.riskEngine = riskEngine;
-    this.initializeSyntheticData();
+    this.initializeDemoData();
   }
 
-  private initializeSyntheticData(): void {
-    // Generate some initial Form 17C summaries and results
-    const states = ['Delhi', 'Maharashtra', 'Uttar Pradesh'];
-    const constituencies = {
-      'Delhi': ['New Delhi', 'Chandni Chowk', 'South Delhi'],
-      'Maharashtra': ['Mumbai North', 'Mumbai South'],
-      'Uttar Pradesh': ['Lucknow', 'Varanasi']
-    };
+  private initializeDemoData(): void {
+    const { summaries, records } = generateDemoBooths();
 
-    for (const state of states) {
-      for (const constituency of constituencies[state] || []) {
-        const boothId = generateBoothId(state, constituency);
-        const summary = generateForm17CSummary(boothId, constituency);
-        this.form17cSummaries.set(boothId, summary);
+    // Load Summaries
+    for (const summary of summaries) {
+      this.form17cSummaries.set(summary.booth_id, summary);
+    }
 
-        // Generate election results
-        const results = generateElectionResult(constituency, state);
-        this.electionResults.set(constituency, results);
-      }
+    // Load Records (Upload logic)
+    for (const boothRecords of records) {
+        if (boothRecords.length === 0) continue;
+        const boothId = boothRecords[0].booth_id;
+        
+        // Simulate upload
+        const uploadId = uuidv4();
+        // Fix up upload ID
+        const finalRecords = boothRecords.map(r => ({...r, form17a_upload_id: uploadId}));
+        this.form17aRecords.set(uploadId, finalRecords);
+
+        // Track EPICS
+        if (!this.boothEpics.has(boothId)) {
+            this.boothEpics.set(boothId, new Set());
+        }
+        for (const r of finalRecords) {
+            this.boothEpics.get(boothId)!.add(r.epic_id);
+        }
+
+        // Run Audit (Without creating flags here since we want to demonstrate real-time, but for init we can pre-populate or let user upload)
+        // For demo init, we just store data. Flags will be generated when user clicks "Audit" or we can run it now.
+        // Let's run it now so dashboard isn't empty.
+        
+        const auditFlags = this.riskEngine.scoreForm17AAudit(finalRecords);
+        // Check mismatch
+        const summary = this.form17cSummaries.get(boothId);
+        if (summary) {
+             const mismatchFlag = this.riskEngine.checkCountMismatch(finalRecords.length, summary.total_votes_polled, boothId);
+             if (mismatchFlag) auditFlags.push(mismatchFlag);
+        }
+
+        for (const f of auditFlags) {
+            this.flags.set(f.flag_id, f);
+        }
     }
   }
 
@@ -135,18 +158,101 @@ export class ElectionAuditDomain {
     return this.form17cSummaries.get(booth_id);
   }
 
-  // Get election results (read-only, aggregated)
-  getElectionResults(constituency?: string): ElectionResult[] {
-    if (constituency) {
-      return this.electionResults.get(constituency) || [];
-    }
+  // GENERATE INTEGRITY CERTIFICATE
+  // NOTE: Does NOT access individual vote choices. Only process metadata.
+  generateIntegrityCertificate(constituencyId: string): IntegrityCertificate {
+    // 1. Calculate Roll Risk Score
+    const allFlags = Array.from(this.flags.values());
+    const highRiskFlags = allFlags.filter(f => f.risk_level === 'High Risk').length;
+    const totalFlags = allFlags.length;
     
-    // Return all results
-    const allResults: ElectionResult[] = [];
-    for (const results of this.electionResults.values()) {
-      allResults.push(...results);
+    // Mock total voters
+    const totalVoters = 1000 + (totalFlags * 50); 
+    const duplicateProb = Math.min(100, (highRiskFlags / totalVoters) * 100 * 5); 
+    
+    // Base score: 100 - penalties
+    const rollScoreRaw = Math.max(0, 100 - (highRiskFlags * 2));
+
+    const rollRiskScore: RollRiskScore = {
+      total_voters: totalVoters,
+      high_risk_detected: highRiskFlags,
+      duplicate_probability: parseFloat(duplicateProb.toFixed(2)),
+      cluster_size_alerts: allFlags.filter(f => f.reason === 'MULTIPLE_APPLICATIONS').length,
+      final_score: rollScoreRaw,
+      risk_level: highRiskFlags > 10 ? 'High' : highRiskFlags > 5 ? 'Medium' : 'Low'
+    };
+
+    // 2. Polling Consistency Check
+    let matchedBooths = 0;
+    let mismatchedBooths = 0;
+    let total17a = 0;
+    let total17c = 0;
+
+    for (const summary of this.form17cSummaries.values()) {
+      const f17a = this.getForm17ARecordsByBooth(summary.booth_id).length;
+      total17a += f17a;
+      total17c += summary.total_votes_polled;
+      
+      if (Math.abs(f17a - summary.total_votes_polled) <= 5) {
+        matchedBooths++;
+      } else {
+        mismatchedBooths++;
+      }
     }
-    return allResults;
+
+    const pollingStatus = mismatchedBooths > 0 ? 'CRITICAL_MISMATCH' : 'MATCH';
+    // 100 if MATCH, 50 if MINOR, 0 if CRITICAL
+    const pollingScoreRaw = pollingStatus === 'MATCH' ? 100 : 0; 
+
+    const pollingConsistency: PollingConsistency = {
+      total_booths: matchedBooths + mismatchedBooths,
+      matched_booths: matchedBooths,
+      mismatched_booths: mismatchedBooths,
+      total_votes_form17a: total17a,
+      total_votes_form17c: total17c,
+      deviation_percentage: total17a === 0 ? 0 : parseFloat(((Math.abs(total17a - total17c) / total17a) * 100).toFixed(4)),
+      status: pollingStatus
+    };
+
+    // 3. Turnout Analytics (Mocked)
+    const turnoutAnalytics: TurnoutAnalytics = {
+      current_turnout: 67.5,
+      historical_average: 65.0,
+      deviation_from_baseline: 2.5,
+      spike_detected: false
+    };
+    // 100 if no spike, 50 if spike
+    const turnoutScoreRaw = turnoutAnalytics.spike_detected ? 50 : 100;
+
+    // 4. Final Confidence Index (Weighted)
+    // Weights: Roll Risk (40%), Polling (30%), Turnout (30%)
+    const weights = { roll: 0.4, polling: 0.3, turnout: 0.3 };
+    
+    const rollContrib = rollScoreRaw * weights.roll;
+    const pollingContrib = pollingScoreRaw * weights.polling;
+    const turnoutContrib = turnoutScoreRaw * weights.turnout;
+    
+    const finalScore = Math.round(rollContrib + pollingContrib + turnoutContrib);
+
+    const scoreBreakdown: ScoreBreakdown = {
+      roll_risk_weight: weights.roll,
+      polling_consistency_weight: weights.polling,
+      turnout_analytics_weight: weights.turnout,
+      roll_score_contribution: parseFloat(rollContrib.toFixed(1)),
+      polling_score_contribution: parseFloat(pollingContrib.toFixed(1)),
+      turnout_score_contribution: parseFloat(turnoutContrib.toFixed(1))
+    };
+
+    return {
+      constituency_id: constituencyId,
+      generated_at: new Date().toISOString(),
+      roll_risk: rollRiskScore,
+      polling_consistency: pollingConsistency,
+      turnout_analytics: turnoutAnalytics,
+      final_confidence_index: finalScore,
+      score_breakdown: scoreBreakdown,
+      status: finalScore > 90 ? 'VERIFIED' : 'PROVISIONAL'
+    };
   }
 
   // Get all flags with filtering
@@ -176,10 +282,13 @@ export class ElectionAuditDomain {
           }
           // For form17a flags, check if the EPIC is in the booth
           if (f.entity_type === 'form17a') {
-            const boothEpics = this.boothEpics.get(filters.booth_id);
-            return boothEpics?.has(f.entity_id);
-          }
-          return false;
+          if (!filters.booth_id) {
+    return false; // or throw error depending on strictness
+  }
+
+  const boothEpics = this.boothEpics.get(filters.booth_id);
+  return boothEpics?.has(f.entity_id);
+}
         });
       }
     }
