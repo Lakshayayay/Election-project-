@@ -1,7 +1,7 @@
 // Main Server Entry Point
 // Express + Socket.IO Backend for Election Integrity System
 
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
@@ -60,14 +60,14 @@ function emitToCitizen(socketId: string, event: string, data: any) {
 // ========== REST API ROUTES ==========
 
 // Health check
-app.get('/api/health', (req, res) => {
+app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // ========== VOTER REGISTRY DOMAIN (Pre-Election) ==========
 
 // Submit voter request
-app.post('/api/voter/request', (req, res) => {
+app.post('/api/voter/request', (req: Request, res: Response) => {
   try {
     const { request_type, submitted_data, epic_id } = req.body;
 
@@ -109,7 +109,7 @@ app.post('/api/voter/request', (req, res) => {
 });
 
 // Track EPIC status
-app.post('/api/voter/track-status', (req, res) => {
+app.post('/api/voter/track-status', (req: Request, res: Response) => {
   try {
     const { request_id, epic_id, mobile } = req.body;
     
@@ -131,7 +131,7 @@ app.post('/api/voter/track-status', (req, res) => {
 });
 
 // Get voter by EPIC ID (for EPIC verification)
-app.get('/api/voter/epic/:epicId', (req, res) => {
+app.get('/api/voter/epic/:epicId', (req: Request, res: Response) => {
   try {
     const { epicId } = req.params;
     const voter = voterRegistry.findVoterByEpic(epicId);
@@ -149,7 +149,7 @@ app.get('/api/voter/epic/:epicId', (req, res) => {
 // ========== ELECTION AUDIT DOMAIN (Post-Election) ==========
 
 // Upload Form 17A records
-app.post('/api/audit/form17a/upload', (req, res) => {
+app.post('/api/audit/form17a/upload', (req: Request, res: Response) => {
   try {
     const { booth_id, records } = req.body;
 
@@ -183,7 +183,7 @@ app.post('/api/audit/form17a/upload', (req, res) => {
 });
 
 // Upload Form 17C summary
-app.post('/api/audit/form17c/upload', (req, res) => {
+app.post('/api/audit/form17c/upload', (req: Request, res: Response) => {
   try {
     const summary = electionAudit.uploadForm17CSummary(req.body);
 
@@ -207,7 +207,7 @@ app.post('/api/audit/form17c/upload', (req, res) => {
 
 // Get Integrity Certificate (Provisional)
 // NOTE: Replaces old "Election Results" endpoint to avoid exposing vote counts.
-app.get('/api/audit/certificate/:constituencyId', (req, res) => {
+app.get('/api/audit/certificate/:constituencyId', (req: Request, res: Response) => {
   try {
     const { constituencyId } = req.params;
     const certificate = electionAudit.generateIntegrityCertificate(constituencyId);
@@ -226,7 +226,7 @@ app.get('/api/audit/certificate/:constituencyId', (req, res) => {
 // ========== AUTHORITY DASHBOARD APIs ==========
 
 // Get all voter requests
-app.get('/api/authority/voter-requests', (req, res) => {
+app.get('/api/authority/voter-requests', (req: Request, res: Response) => {
   try {
     const { status, risk_level, request_type } = req.query;
     const requests = voterRegistry.getAllRequests({
@@ -242,7 +242,7 @@ app.get('/api/authority/voter-requests', (req, res) => {
 });
 
 // Update request status
-app.post('/api/authority/voter-request/:requestId/status', (req, res) => {
+app.post('/api/authority/voter-request/:requestId/status', (req: Request, res: Response) => {
   try {
     const { requestId } = req.params;
     const { status, updated_by } = req.body;
@@ -271,7 +271,7 @@ app.post('/api/authority/voter-request/:requestId/status', (req, res) => {
 });
 
 // Get all flags
-app.get('/api/authority/flags', (req, res) => {
+app.get('/api/authority/flags', (req: Request, res: Response) => {
   try {
     const { risk_level, entity_type, resolved, booth_id } = req.query;
     const flags = electionAudit.getAllFlags({
@@ -288,7 +288,7 @@ app.get('/api/authority/flags', (req, res) => {
 });
 
 // Resolve flag
-app.post('/api/authority/flag/:flagId/resolve', (req, res) => {
+app.post('/api/authority/flag/:flagId/resolve', (req: Request, res: Response) => {
   try {
     const { flagId } = req.params;
     const { resolved_by } = req.body;
@@ -310,7 +310,7 @@ app.post('/api/authority/flag/:flagId/resolve', (req, res) => {
 });
 
 // Get booth risk summary
-app.get('/api/authority/booth/:boothId/risk', (req, res) => {
+app.get('/api/authority/booth/:boothId/risk', (req: Request, res: Response) => {
   try {
     const { boothId } = req.params;
     const summary = electionAudit.getBoothRiskSummary(boothId);
@@ -322,7 +322,7 @@ app.get('/api/authority/booth/:boothId/risk', (req, res) => {
 });
 
 // Get dashboard stats
-app.get('/api/authority/stats', (req, res) => {
+app.get('/api/authority/stats', (req: Request, res: Response) => {
   try {
     const pendingRequests = voterRegistry.getPendingRequestsCount();
     const allFlags = electionAudit.getAllFlags({ resolved: false });
