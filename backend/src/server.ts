@@ -59,7 +59,12 @@ function emitToCitizen(socketId: string, event: string, data: any) {
 
 // ========== REST API ROUTES ==========
 
-// Health check
+// Health check (Deployment Mandatory)
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ status: "ok", uptime: process.uptime() });
+});
+
+// API Health check
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
